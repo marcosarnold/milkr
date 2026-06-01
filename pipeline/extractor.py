@@ -57,7 +57,7 @@ class CardExtraction(BaseModel):
 
 extractor = Agent(
     'anthropic:claude-sonnet-4-6',
-    result_type=CardExtraction,
+    output_type=CardExtraction,
     system_prompt="""You extract credit card reward data from marketing page content.
     
 Rules for rate extraction:
@@ -93,7 +93,7 @@ async def extract_card_from_url(url: str, fc: firecrawl.FirecrawlApp) -> CardExt
         if not content:
             return None
         result = await extractor.run(f"Extract card data from this page:\n\n{content}")
-        return result.data
+        return result.output
     except Exception as e:
         print(f"  [SKIP] {url}: {e}")
         return None

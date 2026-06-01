@@ -48,7 +48,7 @@ class RotatingOverride(BaseModel):
 
 override_agent = Agent(
     'anthropic:claude-haiku-4-5',
-    result_type=RotatingOverride,
+    output_type=RotatingOverride,
     system_prompt="""You extract rotating credit card reward announcements.
 Given page content, find any new quarterly bonus category announcement.
 Return the structured data for that announcement.
@@ -75,7 +75,7 @@ async def scan_quarterly_announcements():
                 result = await override_agent.run(
                     f"Card: {card_id}\nPage content:\n{content}"
                 )
-                override = result.data
+                override = result.output
 
                 if not override.is_new_announcement:
                     continue
@@ -132,7 +132,7 @@ async def weekly_diff_check():
                 # Import here to avoid circular
                 from pipeline.extractor import extractor, upsert_card, CardExtraction
                 result = await extractor.run(f"Extract card data:\n\n{content[:8000]}")
-                await upsert_card(db, result.data, card["source_url"], fresh_hash)
+                await upsert_card(db, result.output, card["source_url"], fresh_hash)
 
             except Exception as e:
                 print(f"  [ERROR] {card['name']}: {e}")

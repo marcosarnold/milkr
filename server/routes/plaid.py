@@ -16,7 +16,6 @@ router = APIRouter()
 
 _ENV_MAP = {
     "sandbox": plaid.Environment.Sandbox,
-    "development": plaid.Environment.Development,
     "production": plaid.Environment.Production,
 }
 
@@ -45,7 +44,7 @@ async def create_link_token(req: LinkTokenRequest):
         response = plaid_client.link_token_create(
             LinkTokenCreateRequest(
                 user=LinkTokenCreateRequestUser(client_user_id=req.user_id),
-                client_name="CashCow",
+                client_name="Milkr",
                 products=[Products("liabilities")],
                 country_codes=[CountryCode("US")],
                 language="en",

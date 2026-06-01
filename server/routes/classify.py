@@ -1,8 +1,6 @@
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
-import pydantic_ai
 from pydantic_ai import Agent
-import anthropic
 
 router = APIRouter()
 
@@ -28,7 +26,7 @@ class ClassifyResponse(BaseModel):
 
 agent = Agent(
     'anthropic:claude-haiku-4-5',
-    result_type=ClassifyResponse,
+    output_type=ClassifyResponse,
     system_prompt=f"""You are a credit card reward classification engine.
 Given a merchant domain and optional page title, classify the merchant for credit card reward purposes.
 
@@ -59,4 +57,4 @@ async def classify_merchant(req: ClassifyRequest) -> ClassifyResponse:
         prompt += f"\nPage title: {req.page_title}"
 
     result = await agent.run(prompt)
-    return result.data
+    return result.output

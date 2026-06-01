@@ -5,6 +5,8 @@ export default defineConfig({
   srcDir: 'src',
   extensionApi: 'chrome',
   modules: ['@wxt-dev/module-react'],
+  // Don't auto-launch a temp Chrome — load the extension manually in your real browser
+  runner: { disabled: true },
   vite: () => ({
     // Cast needed: @tailwindcss/vite vendors its own Vite, WXT vendors a different one;
     // types diverge on hotUpdate but the plugin works correctly at runtime.
@@ -18,16 +20,6 @@ export default defineConfig({
     host_permissions: ['https://*/*'],
     action: {
       default_popup: 'popup.html',
-      default_icon: {
-        '16': 'icon/16.png',
-        '48': 'icon/48.png',
-        '128': 'icon/128.png',
-      },
-    },
-    icons: {
-      '16': 'icon/16.png',
-      '48': 'icon/48.png',
-      '128': 'icon/128.png',
     },
     commands: {
       _execute_action: {

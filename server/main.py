@@ -48,11 +48,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "").split(",")
+# In dev, allow all origins so the extension (chrome-extension://[dynamic-id])
+# can reach localhost without needing the exact ID in ALLOWED_ORIGINS.
+# In prod on Railway, set ALLOWED_ORIGINS to your exact extension origin.
+_raw_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+allow_all = not _raw_origins or _raw_origins == ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
+    allow_origins=["*"] if allow_all else _raw_origins,
+    allow_origin_regex=r"chrome-extension://.*" if not allow_all else None,
+    allow_credentials=False,  # must be False when allow_origins=["*"]
     allow_methods=["*"],
     allow_headers=["*"],
 )
