@@ -23,7 +23,7 @@ export const preferencesStorage = storage.defineItem<UserPreferences>(
 
 // ─── IndexedDB — transaction history (larger, structured) ────────────────────
 
-const DB_NAME = 'cashcow';
+const DB_NAME = 'milkr';
 const DB_VERSION = 1;
 
 let _db: IDBPDatabase | null = null;
@@ -45,17 +45,6 @@ async function getDB(): Promise<IDBPDatabase> {
     },
   });
   return _db;
-}
-
-export interface RecommendationHistoryEntry {
-  id: string;
-  domain: string;
-  merchantName: string;
-  category: string;
-  transactionAmount: number | null;
-  chosenCardId: string | null;
-  expectedValue: number | null;
-  generatedAt: number;
 }
 
 export const historyDB = {

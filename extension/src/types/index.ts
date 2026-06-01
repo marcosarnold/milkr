@@ -145,6 +145,19 @@ export interface RewardOverride {
   createdAt: string;
 }
 
+// ─── History ─────────────────────────────────────────────────────────────────
+
+export interface RecommendationHistoryEntry {
+  id: string;
+  domain: string;
+  merchantName: string;
+  category: string;
+  transactionAmount: number | null;
+  chosenCardId: string | null;
+  expectedValue: number | null;
+  generatedAt: number;
+}
+
 // ─── User preferences ────────────────────────────────────────────────────────
 
 export interface UserPreferences {

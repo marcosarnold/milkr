@@ -1,7 +1,7 @@
 import aiosqlite
 import os
 
-DB_PATH = os.getenv("DATABASE_URL", "cashcow.db")
+DB_PATH = os.getenv("DATABASE_URL", "milkr.db")
 
 CREATE_CARDS = """
 CREATE TABLE IF NOT EXISTS cards (

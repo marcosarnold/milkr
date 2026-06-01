@@ -3,7 +3,7 @@ from db.database import get_db
 import aiosqlite, json, os
 
 router = APIRouter()
-DB_PATH = os.getenv("DATABASE_URL", "cashcow.db")
+DB_PATH = os.getenv("DATABASE_URL", "milkr.db")
 
 @router.get("/")
 async def list_cards(issuer: str | None = Query(None)):

@@ -6,10 +6,12 @@ export default defineConfig({
   extensionApi: 'chrome',
   modules: ['@wxt-dev/module-react'],
   vite: () => ({
-    plugins: [tailwindcss()],
+    // Cast needed: @tailwindcss/vite vendors its own Vite, WXT vendors a different one;
+    // types diverge on hotUpdate but the plugin works correctly at runtime.
+    plugins: [tailwindcss() as any],
   }),
   manifest: {
-    name: 'CashCow',
+    name: 'Milkr',
     description: 'Best way to pay at every checkout — credit, debit, BNPL, or virtual card.',
     version: '0.1.0',
     permissions: ['storage', 'activeTab', 'scripting'],
@@ -30,7 +32,7 @@ export default defineConfig({
     commands: {
       _execute_action: {
         suggested_key: { default: 'Ctrl+Shift+H', mac: 'Command+Shift+H' },
-        description: 'Open CashCow',
+        description: 'Open Milkr',
       },
     },
   },

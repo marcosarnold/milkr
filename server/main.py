@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
 # ─── App ─────────────────────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="CashCow API",
+    title="Milkr API",
     version="0.1.0",
     lifespan=lifespan,
 )

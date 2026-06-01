@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# WXT generated files
+extension/.wxt/
+extension/.output/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+server/venv/
+.venv/
+
+# Env files (never commit real keys)
+.env
+server/.env
+
+# Databases
+*.db
+*.db-shm
+*.db-wal
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp

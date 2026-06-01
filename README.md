@@ -1,8 +1,8 @@
-# CashCow
+# Milkr
 
 > AI-powered smart wallet — tells you the best way to pay at any checkout.
 
-Built at Cal Hacks 12.0. Rebuilt with a clean stack.
+Originally built at Cal Hacks 12.0. Redesigned with intention.
 
 ## Structure
 
