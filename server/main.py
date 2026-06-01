@@ -1,0 +1,63 @@
+import os
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+load_dotenv()
+
+from routes.classify import router as classify_router
+from routes.cards import router as cards_router
+from routes.plaid import router as plaid_router
+from routes.health import router as health_router
+from pipeline.watchers.rotating import scan_quarterly_announcements, weekly_diff_check
+
+# ─── Scheduler ────────────────────────────────────────────────────────────────
+
+scheduler = AsyncIOScheduler(timezone="America/New_York")
+
+def setup_schedule():
+    # Weekly diff check — every Monday 9am ET
+    scheduler.add_job(weekly_diff_check, 'cron', day_of_week='mon', hour=9, minute=0)
+
+    # Quarterly announcement scanner — 15th of March, June, September, December
+    scheduler.add_job(
+        scan_quarterly_announcements,
+        'cron',
+        month='3,6,9,12',
+        day=15,
+        hour=8,
+        minute=0,
+    )
+
+# ─── App lifecycle ────────────────────────────────────────────────────────────
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    setup_schedule()
+    scheduler.start()
+    yield
+    scheduler.shutdown()
+
+# ─── App ─────────────────────────────────────────────────────────────────────
+
+app = FastAPI(
+    title="CashCow API",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "").split(",")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(health_router)
+app.include_router(classify_router, prefix="/classify")
+app.include_router(cards_router, prefix="/cards")
+app.include_router(plaid_router, prefix="/plaid")
