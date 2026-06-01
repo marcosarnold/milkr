@@ -9,7 +9,7 @@ Built at Cal Hacks 12.0 as "CashCow", rebuilt as Milkr.
 1. Detects checkout pages automatically via multi-signal DOM analysis
 2. Classifies the merchant using Claude Haiku (MCC-aware, not just URL → category)
 3. Ranks every card in your wallet by expected dollar value back
-4. Surfaces the winner with rationale, activation warnings, BNPL options, and gift card stacking tips
+4. Surfaces the winner with rationale, activation warnings, BNPL (Buy Now, Pay Later) options, and gift card stacking tips
 
 ## Why it's different
 
@@ -53,13 +53,13 @@ pipeline/
 
 ## Edge cases handled
 
-- **Superstore exclusions** — Amex Gold earns 4x groceries but not at Target/Walmart (MCC 5310). Per-card `categoryExclusions[]` checked before ranking.
-- **Spending cap splits** — Amex Gold caps groceries at $25K/yr. If $10 remains on a $50 order, blended rate = (10 × bonus + 40 × base) / 50.
-- **Rotating category activation** — Chase Freedom and Discover It require manual activation. `requiresActivation` flag shown in UI with direct link.
-- **SPA navigation** — `MutationObserver` debounced at 300ms, `lastHref` tracked inside `main()` to survive WXT's HMR.
-- **Point value subjectivity** — Chase UR worth 1cpp cash, 1.5cpp portal, 2cpp+ transfers. User sets preference at setup; applied to EV calc.
-- **Network acceptance** — Costco Visa-only enforced via `notAcceptedAt[]` per card.
-- **Foreign transaction fees** — 3% FTF deducted from expected value on non-.com/.us domains.
+- **Superstore exclusions** — Amex Gold earns 4x at grocery stores, but not at Target or Walmart (which are classified as discount stores, not groceries). Milkr knows the difference and won't show the wrong rate.
+- **Spending cap splits** — Some cards cap bonus rates at a yearly limit (e.g. Amex Gold: 4x groceries up to $25K/yr). If you're near the cap, Milkr calculates a blended rate across the bonus and base portions of your transaction.
+- **Rotating category activation** — Cards like Chase Freedom and Discover It require you to manually activate bonus categories each quarter. Milkr shows a warning and links directly to the activation page.
+- **Single-page app navigation** — Most checkout flows (Amazon, Shopify) don't trigger a full page reload. Milkr uses a `MutationObserver` to watch for DOM changes so it never misses a checkout.
+- **Point value subjectivity** — Chase points are worth 1¢ as cash back, 1.5¢ through the travel portal, or 2¢+ via transfer partners. You set your preference at wallet setup so the ranking reflects what your points are actually worth to you.
+- **Network acceptance** — Costco only accepts Visa. Milkr filters out incompatible cards before ranking so it never recommends a card that won't work.
+- **Foreign transaction fees** — Cards with a 3% foreign transaction fee get that amount deducted from their expected value when you're on a non-US site.
 
 ## Tech stack
 
@@ -99,10 +99,3 @@ npm run build
 # 5. Load in Chrome
 # chrome://extensions → Developer mode → Load unpacked → extension/.output/chrome-mv3
 ```
-
-## Roadmap
-
-- [ ] Plaid auto-import (maps card names → catalog via rapidfuzz)
-- [ ] Lithic virtual card routing (issue per-merchant card on the fly)
-- [ ] Quarterly rotating reward auto-detection pipeline live
-- [ ] Firefox support
