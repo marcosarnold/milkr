@@ -1,4 +1,5 @@
 import type { MerchantContext, RankedCard } from '@/types';
+import CardInfoTooltip from '@/components/CardInfoTooltip';
 
 // ─── WhyPanel ─────────────────────────────────────────────────────────────────
 // Accordion breakdown rendered inside the best-card bubble.
@@ -127,9 +128,10 @@ function ComparisonRow({
       </span>
 
       {/* Card name */}
-      <p className={`flex-1 text-xs truncate ${isWinner ? 'font-semibold text-gray-900' : 'text-gray-500'}`}>
-        {catalog.name}
-      </p>
+      <div className={`flex items-center gap-0.5 flex-1 min-w-0 ${isWinner ? 'font-semibold text-gray-900' : 'text-gray-500'}`}>
+        <p className="text-xs truncate">{catalog.name}</p>
+        <CardInfoTooltip catalog={catalog} wallet={card.wallet} position="top" />
+      </div>
 
       {/* Rate */}
       <span className={`text-xs w-8 text-right shrink-0 ${isWinner ? 'font-semibold text-[#1D9E75]' : 'text-gray-400'}`}>

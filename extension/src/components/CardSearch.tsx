@@ -3,6 +3,7 @@ import type { CatalogCard, RedemptionPreference } from '@/types';
 import { walletStorage } from '@/lib/storage';
 import { getRedemptionOptions, isPointsCard } from '@/lib/redemption';
 import { searchCards, enrichCard, type SearchHit } from '@/entrypoints/popup/api';
+import CardInfoTooltip from '@/components/CardInfoTooltip';
 
 // ─── CardSearch ───────────────────────────────────────────────────────────────
 // Standalone search + auto-enrichment widget used inside WalletSetup.
@@ -156,7 +157,10 @@ export default function CardSearch({ initialQuery = '', onCardAdded, onDismiss }
                   className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 truncate">{card.name}</p>
+                    <div className="flex items-center gap-0.5">
+                      <p className="text-sm font-medium text-gray-800 truncate">{card.name}</p>
+                      <CardInfoTooltip catalog={card} />
+                    </div>
                     <p className="text-[11px] text-gray-400">
                       {card.issuer} · {card.network.toUpperCase()} · {topRateSummary(card)}
                     </p>

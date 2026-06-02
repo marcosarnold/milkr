@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { BNPLOption, MerchantContext, RankedCard, Recommendation } from '@/types';
 import { historyDB } from '@/lib/storage';
 import WhyPanel from '@/components/WhyPanel';
+import CardInfoTooltip from '@/components/CardInfoTooltip';
 
 // ─── Display maps ─────────────────────────────────────────────────────────────
 
@@ -163,7 +164,10 @@ function BestCardSection({
         {/* Card name + rate */}
         <div className="flex items-start gap-3">
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-gray-900 text-sm leading-snug">{catalog.name}</p>
+            <div className="flex items-center gap-0.5">
+              <p className="font-semibold text-gray-900 text-sm leading-snug">{catalog.name}</p>
+              <CardInfoTooltip catalog={catalog} wallet={card.wallet} />
+            </div>
             <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{resolved.rationale}</p>
           </div>
           <div className="text-right shrink-0">
@@ -256,7 +260,10 @@ function RankedRow({ rank, card }: { rank: number; card: RankedCard }) {
     <div className="flex items-center gap-3">
       <span className="text-xs text-gray-300 w-4 text-right shrink-0">{rank}</span>
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-gray-700 truncate">{catalog.name}</p>
+        <div className="flex items-center gap-0.5">
+          <p className="text-sm text-gray-700 truncate">{catalog.name}</p>
+          <CardInfoTooltip catalog={catalog} wallet={card.wallet} />
+        </div>
         {resolved.requiresActivation && (
           <p className="text-[10px] text-amber-500">⚡ needs activation</p>
         )}

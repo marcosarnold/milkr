@@ -3,6 +3,7 @@ import type { CatalogCard, RedemptionPreference, WalletCard } from '@/types';
 import { walletStorage } from '@/lib/storage';
 import { getRedemptionOptions, isPointsCard } from '@/lib/redemption';
 import CardSearch from '@/components/CardSearch';
+import CardInfoTooltip from '@/components/CardInfoTooltip';
 
 export default function WalletSetup({
   catalog,
@@ -218,7 +219,10 @@ function CardRow({ card, checked, onToggle }: { card: CatalogCard; checked: bool
         )}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-800 truncate">{card.name}</p>
+        <div className="flex items-center gap-0.5">
+          <p className="text-sm font-medium text-gray-800 truncate">{card.name}</p>
+          <CardInfoTooltip catalog={card} />
+        </div>
         <p className="text-[11px] text-gray-400">
           {card.issuer}
           {card.annualFee > 0 ? ` · $${card.annualFee}/yr` : ' · No annual fee'}
