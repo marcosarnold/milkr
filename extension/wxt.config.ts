@@ -16,7 +16,7 @@ export default defineConfig({
     name: 'Milkr',
     description: 'Best way to pay at every checkout — credit, debit, BNPL, or virtual card.',
     version: '0.1.0',
-    permissions: ['storage', 'activeTab', 'scripting'],
+    permissions: ['storage', 'activeTab', 'scripting', 'tabs'],
     host_permissions: ['https://*/*'],
     action: {
       default_popup: 'popup.html',

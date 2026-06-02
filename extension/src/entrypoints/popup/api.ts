@@ -102,6 +102,55 @@ export async function enrichCard(query: string): Promise<EnrichResult> {
   return { source: raw.source, card: rowToCatalogCard(raw.card), confidence: raw.confidence };
 }
 
+// ─── Plaid ────────────────────────────────────────────────────────────────────
+
+export async function createLinkToken(userId = 'default'): Promise<{ linkToken: string; sessionToken: string }> {
+  const res = await fetch(`${API_URL}/plaid/link-token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId }),
+  });
+  if (!res.ok) throw new Error(`Link token failed: ${res.status}`);
+  const data = await res.json();
+  return { linkToken: data.link_token as string, sessionToken: data.session_token as string };
+}
+
+/** Poll for completed Plaid import. Returns cards array or null if not ready yet. */
+export async function checkPlaidSession(session: string): Promise<{ name: string; last_four: string | null; issuer: string }[] | null> {
+  const res = await fetch(`${API_URL}/plaid/result/${session}`);
+  if (res.status === 202) return null;   // pending
+  if (res.status === 404) return null;   // session gone (server restart)
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.cards as { name: string; last_four: string | null; issuer: string }[];
+}
+
+export function plaidLinkUrl(linkToken: string, sessionToken: string): string {
+  return `${API_URL}/plaid/link?token=${encodeURIComponent(linkToken)}&session=${encodeURIComponent(sessionToken)}`;
+}
+
+export interface PlaidMatch {
+  plaid_name: string;
+  last_four: string | null;
+  issuer: string;
+  matched_catalog_id: string | null;
+  matched_catalog_name: string | null;
+  confidence: number;
+}
+
+export async function matchPlaidCards(
+  cards: { name: string; last_four?: string | null; issuer?: string }[]
+): Promise<PlaidMatch[]> {
+  const res = await fetch(`${API_URL}/plaid/match`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cards }),
+  });
+  if (!res.ok) throw new Error(`Plaid match failed: ${res.status}`);
+  const data = await res.json();
+  return data.matches as PlaidMatch[];
+}
+
 // ─── Transform ────────────────────────────────────────────────────────────────
 // SQLite rows come back snake_case with JSON strings for array/object columns.
 

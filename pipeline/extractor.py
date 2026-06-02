@@ -10,7 +10,7 @@ import firecrawl
 import aiosqlite
 
 FIRECRAWL_KEY = os.getenv("FIRECRAWL_API_KEY", "")
-DB_PATH = os.getenv("DATABASE_URL", "cashcow.db")
+DB_PATH = os.getenv("DATABASE_URL") or "milkr.db"
 
 # ─── Issuer discovery URLs ────────────────────────────────────────────────────
 # These are the listing pages — extractor crawls links from each

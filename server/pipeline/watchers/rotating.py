@@ -5,15 +5,25 @@ Rotating reward watcher — two jobs:
 2. weekly_diff_check: runs every Monday
    — MD5-diffs each card's source page, re-extracts on change
 """
-import os, asyncio, hashlib, uuid, json
-from datetime import date, timedelta
+import os, hashlib, uuid, importlib.util
+from pathlib import Path
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 import firecrawl
 import aiosqlite
 
-DB_PATH = os.getenv("DATABASE_URL", "cashcow.db")
+DB_PATH      = os.getenv("DATABASE_URL") or "milkr.db"
 FIRECRAWL_KEY = os.getenv("FIRECRAWL_API_KEY", "")
+
+# ─── Importlib workaround for server/pipeline/ vs root pipeline/ collision ─────
+# rotating.py lives at server/pipeline/watchers/rotating.py
+# root extractor is at pipeline/extractor.py (4 levels up from this file)
+_extractor_path = Path(__file__).resolve().parent.parent.parent.parent / "pipeline" / "extractor.py"
+_ext_spec = importlib.util.spec_from_file_location("root_extractor_watcher", _extractor_path)
+_ext_mod  = importlib.util.module_from_spec(_ext_spec)
+_ext_spec.loader.exec_module(_ext_mod)
+extractor  = _ext_mod.extractor
+upsert_card = _ext_mod.upsert_card
 
 # ─── Quarterly card sources ───────────────────────────────────────────────────
 
@@ -65,11 +75,12 @@ async def scan_quarterly_announcements():
     async with aiosqlite.connect(DB_PATH) as db:
         for card_id, config in ROTATING_SOURCES.items():
             try:
-                page = fc.scrape_url(config["newsroom"], params={"formats": ["markdown"]})
-                content = page.get("markdown", "")[:6000]
+                page = fc.scrape_url(config["newsroom"], formats=["markdown"])
+                content = (getattr(page, "markdown", None) or "") [:6000]
 
                 # Only process if keywords are present
                 if not any(term.lower() in content.lower() for term in config["search_terms"]):
+                    print(f"  [SKIP] {card_id}: no keywords found")
                     continue
 
                 result = await override_agent.run(
@@ -81,11 +92,11 @@ async def scan_quarterly_announcements():
                     continue
 
                 # Check if this override already exists
-                existing = await db.execute_fetchall(
+                rows = await db.execute_fetchall(
                     "SELECT id FROM card_reward_overrides WHERE card_id=? AND category=? AND start_date=?",
                     (card_id, override.category, override.start_date),
                 )
-                if existing:
+                if rows:
                     continue
 
                 await db.execute("""
@@ -105,6 +116,8 @@ async def scan_quarterly_announcements():
             except Exception as e:
                 print(f"  [ERROR] {card_id}: {e}")
 
+    print("[Rotating watcher] Quarterly scan complete.")
+
 # ─── Weekly diff check ────────────────────────────────────────────────────────
 
 async def weekly_diff_check():
@@ -120,17 +133,14 @@ async def weekly_diff_check():
 
         for card in cards:
             try:
-                page = fc.scrape_url(card["source_url"], params={"formats": ["markdown"]})
-                content = page.get("markdown", "")
+                page    = fc.scrape_url(card["source_url"], formats=["markdown"])
+                content = getattr(page, "markdown", None) or ""
                 fresh_hash = hashlib.md5(content.encode()).hexdigest()
 
                 if fresh_hash == card["content_hash"]:
                     continue  # No change
 
                 print(f"  [CHANGED] {card['name']} — re-extracting...")
-
-                # Import here to avoid circular
-                from pipeline.extractor import extractor, upsert_card, CardExtraction
                 result = await extractor.run(f"Extract card data:\n\n{content[:8000]}")
                 await upsert_card(db, result.output, card["source_url"], fresh_hash)
 

@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS cards (
     source_url            TEXT,
     content_hash          TEXT,
     scraped_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_verified         TIMESTAMP
+    last_verified         TIMESTAMP,
+    last_enriched_at      TIMESTAMP
 );
 """
 
@@ -69,6 +70,18 @@ async def init_db():
         await db.execute(CREATE_MCC_MAP)
         await db.commit()
     print(f"Database initialised at {DB_PATH}")
+
+async def migrate_db():
+    """Add new columns to existing databases without dropping data."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        for sql in [
+            "ALTER TABLE cards ADD COLUMN last_enriched_at TIMESTAMP",
+        ]:
+            try:
+                await db.execute(sql)
+                await db.commit()
+            except Exception:
+                pass  # column already exists
 
 async def get_db():
     return aiosqlite.connect(DB_PATH)

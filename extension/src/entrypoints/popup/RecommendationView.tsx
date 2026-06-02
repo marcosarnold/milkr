@@ -31,10 +31,12 @@ export default function RecommendationView({
   rec,
   onManageWallet,
   onShowOnboarding,
+  onShowForYou,
 }: {
   rec: Recommendation;
   onManageWallet: () => void;
   onShowOnboarding: () => void;
+  onShowForYou?: () => void;
 }) {
   const ctx = rec.merchantContext;
   const best = rec.ranked[0];
@@ -42,9 +44,11 @@ export default function RecommendationView({
   // Running total of expected value saved — read from IndexedDB after each render.
   // App.tsx saves the current recommendation before mounting this component,
   // so the total already includes today's checkout.
-  const [totalSaved, setTotalSaved] = useState<number>(0);
+  const [totalSaved,   setTotalSaved]   = useState<number>(0);
+  const [historyCount, setHistoryCount] = useState<number>(0);
   useEffect(() => {
     historyDB.totalSaved().then(setTotalSaved);
+    historyDB.recent(10).then(e => setHistoryCount(e.length));
   }, [rec]);
   const rest = rec.ranked.slice(1);
   const noCards = rec.ranked.length === 0;
@@ -104,6 +108,18 @@ export default function RecommendationView({
             <p className="text-[11px] text-amber-600">
               ⚠ Reward category may vary by transaction type at this merchant
             </p>
+          </div>
+        )}
+
+        {/* 5th-checkout prompt — surfaces the For You tab once there's enough history */}
+        {historyCount >= 5 && onShowForYou && (
+          <div className="px-4 py-2 border-t border-gray-50">
+            <button
+              onClick={onShowForYou}
+              className="text-[11px] text-[#1D9E75] hover:underline transition-colors"
+            >
+              See cards that could earn you more →
+            </button>
           </div>
         )}
 

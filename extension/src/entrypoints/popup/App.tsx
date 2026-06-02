@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import type { CatalogCard, MerchantCategory, MerchantContext, Recommendation } from '@/types';
 import { walletStorage, preferencesStorage, historyDB, spendDB } from '@/lib/storage';
 import { buildRecommendation } from '@/lib/rewards/engine';
-import { classifyMerchant, fetchCatalog, fetchOverrides } from './api';
+import { classifyMerchant, fetchCatalog, fetchOverrides, createLinkToken, checkPlaidSession, plaidLinkUrl } from './api';
 import RecommendationView from './RecommendationView';
 import WalletSetup from './WalletSetup';
 import Onboarding from '@/components/Onboarding';
+import CardRecommendations from '@/components/CardRecommendations';
+import PlaidImport from '@/components/PlaidImport';
 
 // Shape written by background.ts into chrome.storage.session
 interface SessionCheckoutCtx {
@@ -22,11 +24,17 @@ type Phase =
   | { tag: 'not-at-checkout' }
   | { tag: 'wallet-setup'; catalog: CatalogCard[] }
   | { tag: 'wallet-editing'; catalog: CatalogCard[]; currentIds: string[] }
+  | { tag: 'plaid-connecting' }
+  | { tag: 'plaid-import' }
   | { tag: 'recommendation'; rec: Recommendation }
   | { tag: 'error'; msg: string };
 
+type ActiveTab = 'main' | 'for-you';
+
 export default function App() {
-  const [phase, setPhase] = useState<Phase>({ tag: 'loading' });
+  const [phase,         setPhase]         = useState<Phase>({ tag: 'loading' });
+  const [activeTab,     setActiveTab]     = useState<ActiveTab>('main');
+  const [walletHasCards, setWalletHasCards] = useState(false);
 
   useEffect(() => { init(); }, []);
 
@@ -38,6 +46,33 @@ export default function App() {
         walletStorage.getValue(),
         preferencesStorage.getValue(),
       ]);
+
+      setWalletHasCards(wallet.length > 0);
+
+      // Check if a Plaid import is ready or in-flight
+      const plaidLocal = await chrome.storage.local.get(['plaidPending', 'plaidSession', 'plaidTabId']);
+
+      async function closePlaidTab() {
+        if (plaidLocal.plaidTabId) {
+          chrome.tabs.remove(plaidLocal.plaidTabId).catch(() => {});
+          await chrome.storage.local.remove('plaidTabId');
+        }
+      }
+
+      if (plaidLocal.plaidPending) {
+        await closePlaidTab();
+        return setPhase({ tag: 'plaid-import' });
+      }
+      if (plaidLocal.plaidSession) {
+        const cards = await checkPlaidSession(plaidLocal.plaidSession).catch(() => null);
+        if (cards && cards.length > 0) {
+          await closePlaidTab();
+          await chrome.storage.local.set({ plaidPending: cards });
+          await chrome.storage.local.remove('plaidSession');
+          return setPhase({ tag: 'plaid-import' });
+        }
+        return setPhase({ tag: 'plaid-connecting' });
+      }
 
       // Show onboarding on first launch with an empty wallet
       if (!wallet.length && !prefs.hasSeenOnboarding) {
@@ -126,6 +161,18 @@ export default function App() {
     }
   }
 
+  async function openPlaidLink() {
+    try {
+      const { linkToken, sessionToken } = await createLinkToken();
+      const tab = await chrome.tabs.create({ url: plaidLinkUrl(linkToken, sessionToken) });
+      // Store session + tab ID so we can poll and close the tab when done
+      await chrome.storage.local.set({ plaidSession: sessionToken, plaidTabId: tab.id });
+      setPhase({ tag: 'plaid-connecting' });
+    } catch (e) {
+      setPhase({ tag: 'error', msg: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
   async function openWalletEditor() {
     setPhase({ tag: 'loading' });
     try {
@@ -148,9 +195,24 @@ export default function App() {
         />
       );
     case 'not-at-checkout':
-      return <NotAtCheckout onShowOnboarding={() => setPhase({ tag: 'onboarding' })} />;
+      return (
+        <div className="w-[380px] bg-white">
+          {walletHasCards && <TabBar activeTab={activeTab} onChange={setActiveTab} />}
+          {activeTab === 'for-you' && walletHasCards
+            ? <CardRecommendations />
+            : <NotAtCheckout onShowOnboarding={() => setPhase({ tag: 'onboarding' })} />
+          }
+        </div>
+      );
+    case 'plaid-connecting':
+      return <PlaidConnecting onCheck={init} />;
+    case 'plaid-import':
+      return <PlaidImport onDone={init} onSkip={async () => {
+        await chrome.storage.local.remove(['plaidPending', 'plaidSession', 'plaidTabId']);
+        init();
+      }} />;
     case 'wallet-setup':
-      return <WalletSetup catalog={phase.catalog} onSave={init} />;
+      return <WalletSetup catalog={phase.catalog} onSave={init} onConnectBank={openPlaidLink} />;
     case 'wallet-editing':
       return (
         <WalletSetup
@@ -158,15 +220,23 @@ export default function App() {
           initialSelected={phase.currentIds}
           onSave={init}
           onCancel={init}
+          onConnectBank={openPlaidLink}
         />
       );
     case 'recommendation':
       return (
-        <RecommendationView
-          rec={phase.rec}
-          onManageWallet={openWalletEditor}
-          onShowOnboarding={() => setPhase({ tag: 'onboarding' })}
-        />
+        <div className="w-[380px] bg-white">
+          <TabBar activeTab={activeTab} onChange={setActiveTab} />
+          {activeTab === 'for-you'
+            ? <CardRecommendations />
+            : <RecommendationView
+                rec={phase.rec}
+                onManageWallet={openWalletEditor}
+                onShowOnboarding={() => setPhase({ tag: 'onboarding' })}
+                onShowForYou={() => setActiveTab('for-you')}
+              />
+          }
+        </div>
       );
     case 'error':
       return <ErrorScreen msg={phase.msg} onRetry={init} />;
@@ -189,6 +259,26 @@ function LoadingScreen() {
   );
 }
 
+function PlaidConnecting({ onCheck }: { onCheck: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 h-44 px-8 text-center">
+      <span className="text-3xl">🏦</span>
+      <div>
+        <p className="text-sm font-semibold text-gray-800">Connecting your bank</p>
+        <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+          Complete the Plaid flow in the browser tab, then come back and check.
+        </p>
+      </div>
+      <button
+        onClick={onCheck}
+        className="text-xs px-4 py-1.5 bg-[#1D9E75] text-white rounded-full hover:bg-[#189060] transition-colors font-medium"
+      >
+        Check for imported cards
+      </button>
+    </div>
+  );
+}
+
 function NotAtCheckout({ onShowOnboarding }: { onShowOnboarding: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 h-44 px-8 text-center">
@@ -206,6 +296,32 @@ function NotAtCheckout({ onShowOnboarding }: { onShowOnboarding: () => void }) {
         How it works
       </button>
     </div>
+  );
+}
+
+// ─── Tab navigation ───────────────────────────────────────────────────────────
+
+function TabBar({ activeTab, onChange }: { activeTab: ActiveTab; onChange: (t: ActiveTab) => void }) {
+  return (
+    <div className="flex border-b border-gray-100">
+      <TabButton label="Best card" active={activeTab === 'main'}     onClick={() => onChange('main')}     />
+      <TabButton label="For you"   active={activeTab === 'for-you'}  onClick={() => onChange('for-you')}  />
+    </div>
+  );
+}
+
+function TabButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-1 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px ${
+        active
+          ? 'text-[#1D9E75] border-[#1D9E75]'
+          : 'text-gray-400 border-transparent hover:text-gray-600'
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 

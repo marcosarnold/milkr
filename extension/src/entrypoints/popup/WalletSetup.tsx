@@ -10,11 +10,13 @@ export default function WalletSetup({
   initialSelected = [],
   onSave,
   onCancel,
+  onConnectBank,
 }: {
   catalog: CatalogCard[];
   initialSelected?: string[];
   onSave: () => void;
   onCancel?: () => void;
+  onConnectBank?: () => void;
 }) {
   const isEditing = initialSelected.length > 0;
   const [selected, setSelected] = useState<Set<string>>(new Set(initialSelected));
@@ -75,7 +77,18 @@ export default function WalletSetup({
         <p className="text-sm font-semibold text-gray-900 mt-0.5">
           {isEditing ? 'Edit your wallet' : 'Add your cards'}
         </p>
-        <p className="text-xs text-gray-400 mt-0.5">Select every card in your wallet</p>
+        <div className="flex items-center justify-between mt-0.5">
+          <p className="text-xs text-gray-400">Select every card in your wallet</p>
+          {onConnectBank && (
+            <button
+              onClick={onConnectBank}
+              className="flex items-center gap-1 text-[11px] text-[#1D9E75] hover:text-[#189060] font-medium transition-colors shrink-0"
+            >
+              <span>🏦</span>
+              <span>Import from bank</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Search bar toggle */}

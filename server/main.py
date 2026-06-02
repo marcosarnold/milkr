@@ -11,6 +11,7 @@ from routes.classify import router as classify_router
 from routes.cards import router as cards_router
 from routes.plaid import router as plaid_router
 from routes.health import router as health_router
+from routes.admin import router as admin_router
 from pipeline.watchers.rotating import scan_quarterly_announcements, weekly_diff_check
 
 # ─── Scheduler ────────────────────────────────────────────────────────────────
@@ -67,3 +68,4 @@ app.include_router(health_router)
 app.include_router(classify_router, prefix="/classify")
 app.include_router(cards_router, prefix="/cards")
 app.include_router(plaid_router, prefix="/plaid")
+app.include_router(admin_router, prefix="/admin")
