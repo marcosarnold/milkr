@@ -10,6 +10,8 @@ Built at Cal Hacks 12.0 as "CashCow", rebuilt as Milkr.
 2. Classifies the merchant using Claude Haiku (MCC-aware, not just URL → category)
 3. Ranks every card in your wallet by expected dollar value back
 4. Surfaces the winner with rationale, activation warnings, BNPL (Buy Now, Pay Later) options, and gift card stacking tips
+5. **Import from bank** — connects via Plaid, fetches your credit cards from the liabilities API, and fuzzy-matches them to the catalog so setup takes seconds
+6. **For You tab** — spend-aware card recommendations based on your actual checkout history
 
 ## Why it's different
 
@@ -30,9 +32,14 @@ extension/
 │   ├── content.ts          # Checkout detection, BNPL DOM scan, MutationObserver (SPA-safe)
 │   ├── background.ts       # Service worker — badge management, session storage
 │   └── popup/              # React popup UI
-│       ├── App.tsx          # State machine: loading → wallet-setup | recommendation | error
+│       ├── App.tsx          # State machine: loading → wallet-setup | plaid-import | recommendation | error
 │       ├── RecommendationView.tsx
-│       └── WalletSetup.tsx
+│       ├── WalletSetup.tsx
+│       └── api.ts           # Typed fetch wrappers for all server endpoints
+├── src/components/
+│   ├── PlaidImport.tsx     # Bank import confirm UI — fuzzy match results, checkbox select
+│   ├── CardRecommendations.tsx  # "For You" tab — spend-based card suggestions
+│   └── CardSearch.tsx      # Freeform card search + AI enrich fallback
 ├── src/lib/
 │   ├── rewards/engine.ts   # Reward resolver — MCC exclusions, cap splits, blended rates, FTF
 │   └── storage/index.ts    # WXT storage (wallet) + IndexedDB (history, spend tracking)
@@ -41,8 +48,9 @@ extension/
 server/
 ├── routes/
 │   ├── classify.py         # POST /classify/merchant — Claude Haiku via PydanticAI
-│   ├── cards.py            # GET /cards/ — serves catalog + overrides from SQLite
-│   └── plaid.py            # Plaid link-token + exchange + liabilities
+│   ├── cards.py            # GET /cards/ + search + enrich — catalog + overrides from SQLite
+│   ├── plaid.py            # Plaid link-token, server-hosted Link page, exchange, liabilities, fuzzy match
+│   └── admin.py            # POST /admin/run/{job} — manual scheduler trigger
 ├── pipeline/watchers/
 │   └── rotating.py         # APScheduler — weekly diff check + quarterly reward scanner
 └── db/database.py          # SQLite schema: cards, card_reward_overrides, mcc_map
