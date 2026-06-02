@@ -165,4 +165,5 @@ export interface UserPreferences {
   showBNPL: boolean;
   showGiftCardTips: boolean;
   internationalMode: boolean;
+  hasSeenOnboarding: boolean;
 }

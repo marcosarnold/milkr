@@ -17,6 +17,7 @@ export const preferencesStorage = storage.defineItem<UserPreferences>(
       showBNPL: true,
       showGiftCardTips: true,
       internationalMode: false,
+      hasSeenOnboarding: false,
     },
   }
 );

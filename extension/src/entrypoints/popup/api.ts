@@ -66,6 +66,42 @@ export interface OverrideEntry {
   confidence: number;
 }
 
+// ─── Search ───────────────────────────────────────────────────────────────────
+
+export interface SearchHit {
+  score: number;
+  card: CatalogCard;
+}
+
+export async function searchCards(query: string): Promise<SearchHit[]> {
+  const res = await fetch(`${API_URL}/cards/search?q=${encodeURIComponent(query)}`);
+  if (!res.ok) throw new Error(`Search failed: ${res.status}`);
+  const rows: { score: number; card: Record<string, unknown> }[] = await res.json();
+  return rows.map((r) => ({ score: r.score, card: rowToCatalogCard(r.card) }));
+}
+
+// ─── Enrich ───────────────────────────────────────────────────────────────────
+
+export interface EnrichResult {
+  source: 'catalog' | 'cached' | 'enriched';
+  card: CatalogCard;
+  confidence: number;
+}
+
+export async function enrichCard(query: string): Promise<EnrichResult> {
+  const res = await fetch(`${API_URL}/cards/enrich`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as any).detail ?? `Enrich failed: ${res.status}`);
+  }
+  const raw = await res.json();
+  return { source: raw.source, card: rowToCatalogCard(raw.card), confidence: raw.confidence };
+}
+
 // ─── Transform ────────────────────────────────────────────────────────────────
 // SQLite rows come back snake_case with JSON strings for array/object columns.
 

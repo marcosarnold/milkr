@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { CatalogCard, MerchantCategory, MerchantContext, Recommendation } from '@/types';
-import { walletStorage } from '@/lib/storage';
+import { walletStorage, preferencesStorage, historyDB, spendDB } from '@/lib/storage';
 import { buildRecommendation } from '@/lib/rewards/engine';
 import { classifyMerchant, fetchCatalog, fetchOverrides } from './api';
 import RecommendationView from './RecommendationView';
 import WalletSetup from './WalletSetup';
+import Onboarding from '@/components/Onboarding';
 
 // Shape written by background.ts into chrome.storage.session
 interface SessionCheckoutCtx {
@@ -17,8 +18,10 @@ interface SessionCheckoutCtx {
 
 type Phase =
   | { tag: 'loading' }
+  | { tag: 'onboarding' }
   | { tag: 'not-at-checkout' }
   | { tag: 'wallet-setup'; catalog: CatalogCard[] }
+  | { tag: 'wallet-editing'; catalog: CatalogCard[]; currentIds: string[] }
   | { tag: 'recommendation'; rec: Recommendation }
   | { tag: 'error'; msg: string };
 
@@ -30,28 +33,35 @@ export default function App() {
   async function init() {
     setPhase({ tag: 'loading' });
     try {
-      // 1. Find the active tab (activeTab permission grants access when popup opens)
+      // 1. Wallet + prefs loaded first — needed for the onboarding gate
+      const [wallet, prefs] = await Promise.all([
+        walletStorage.getValue(),
+        preferencesStorage.getValue(),
+      ]);
+
+      // Show onboarding on first launch with an empty wallet
+      if (!wallet.length && !prefs.hasSeenOnboarding) {
+        return setPhase({ tag: 'onboarding' });
+      }
+
+      // 2. Active tab + checkout context
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!tab?.id) return setPhase({ tag: 'not-at-checkout' });
 
-      // 2. Read checkout context written by the content script → background
       const stored = await chrome.storage.session.get(`checkout:${tab.id}`);
       const sessionCtx = stored[`checkout:${tab.id}`] as SessionCheckoutCtx | undefined;
       if (!sessionCtx) return setPhase({ tag: 'not-at-checkout' });
 
-      // 3. Fetch wallet + catalog in parallel — catalog needed for both setup and recommendation
-      const [wallet, catalog, overrides] = await Promise.all([
-        walletStorage.getValue(),
+      // 3. Catalog + overrides + classify — all independent, fire in parallel
+      const [catalog, overrides, cls] = await Promise.all([
         fetchCatalog(),
         fetchOverrides(),
+        classifyMerchant(sessionCtx.domain, tab.title),
       ]);
 
       if (!wallet.length) {
         return setPhase({ tag: 'wallet-setup', catalog });
       }
-
-      // 4. Classify merchant via Claude Haiku on the server
-      const cls = await classifyMerchant(sessionCtx.domain, tab.title);
 
       const context: MerchantContext = {
         url: sessionCtx.url,
@@ -66,10 +76,62 @@ export default function App() {
         detectedAt: sessionCtx.detectedAt,
       };
 
-      // 5. Run reward engine locally — all math stays in the browser
+      // 4. Run reward engine locally — all math stays in the browser
       const catalogMap = new Map(catalog.map((c) => [c.id, c]));
       const rec = await buildRecommendation(wallet, catalogMap, overrides, context);
+
+      // 5. Persist history + spend — with deduplication so navigating
+      //    to "Manage wallet" and back doesn't create duplicate entries.
+      //
+      //    History ID is keyed to the specific checkout event (domain + detectedAt),
+      //    not to this popup open. db.put() is an upsert, so re-saving the same
+      //    id just overwrites the record rather than adding a new one.
+      const historyId = `${context.domain}:${sessionCtx.detectedAt}`;
+      const best = rec.ranked[0];
+      historyDB.save({
+        id: historyId,
+        domain: context.domain,
+        merchantName: context.merchantName,
+        category: context.category,
+        transactionAmount: context.transactionAmount,
+        chosenCardId: best?.wallet.catalogId ?? null,
+        expectedValue: best?.resolved.expectedValue ?? null,
+        generatedAt: rec.generatedAt,
+      });
+
+      // Spend is additive — guard with a session flag so we only add it once
+      // per checkout event, regardless of how many times the popup is opened.
+      const spendKey = `spendTracked:${historyId}`;
+      const tracked = await chrome.storage.session.get(spendKey);
+      if (!tracked[spendKey] && best && context.transactionAmount) {
+        chrome.storage.session.set({ [spendKey]: true });
+        spendDB.addSpend(best.catalog.id, context.category, context.transactionAmount);
+      }
+
       setPhase({ tag: 'recommendation', rec });
+    } catch (e) {
+      setPhase({ tag: 'error', msg: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  // Called from Onboarding "Get started" (goToCards=true) or "Skip" (goToCards=false)
+  async function dismissOnboarding(goToCards: boolean) {
+    const prefs = await preferencesStorage.getValue();
+    await preferencesStorage.setValue({ ...prefs, hasSeenOnboarding: true });
+    if (goToCards) {
+      const catalog = await fetchCatalog().catch(() => [] as CatalogCard[]);
+      setPhase({ tag: 'wallet-setup', catalog });
+    } else {
+      init();
+    }
+  }
+
+  async function openWalletEditor() {
+    setPhase({ tag: 'loading' });
+    try {
+      const [wallet, catalog] = await Promise.all([walletStorage.getValue(), fetchCatalog()]);
+      const currentIds = wallet.map((w) => w.catalogId);
+      setPhase({ tag: 'wallet-editing', catalog, currentIds });
     } catch (e) {
       setPhase({ tag: 'error', msg: e instanceof Error ? e.message : String(e) });
     }
@@ -78,12 +140,34 @@ export default function App() {
   switch (phase.tag) {
     case 'loading':
       return <LoadingScreen />;
+    case 'onboarding':
+      return (
+        <Onboarding
+          onGetStarted={() => dismissOnboarding(true)}
+          onSkip={() => dismissOnboarding(false)}
+        />
+      );
     case 'not-at-checkout':
-      return <NotAtCheckout />;
+      return <NotAtCheckout onShowOnboarding={() => setPhase({ tag: 'onboarding' })} />;
     case 'wallet-setup':
       return <WalletSetup catalog={phase.catalog} onSave={init} />;
+    case 'wallet-editing':
+      return (
+        <WalletSetup
+          catalog={phase.catalog}
+          initialSelected={phase.currentIds}
+          onSave={init}
+          onCancel={init}
+        />
+      );
     case 'recommendation':
-      return <RecommendationView rec={phase.rec} onManageWallet={init} />;
+      return (
+        <RecommendationView
+          rec={phase.rec}
+          onManageWallet={openWalletEditor}
+          onShowOnboarding={() => setPhase({ tag: 'onboarding' })}
+        />
+      );
     case 'error':
       return <ErrorScreen msg={phase.msg} onRetry={init} />;
   }
@@ -105,7 +189,7 @@ function LoadingScreen() {
   );
 }
 
-function NotAtCheckout() {
+function NotAtCheckout({ onShowOnboarding }: { onShowOnboarding: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 h-44 px-8 text-center">
       <span className="text-3xl">💳</span>
@@ -115,7 +199,12 @@ function NotAtCheckout() {
           Head to a checkout page and Milkr will surface your best card automatically.
         </p>
       </div>
-      <p className="text-[10px] text-gray-300 font-semibold tracking-widest uppercase">milkr</p>
+      <button
+        onClick={onShowOnboarding}
+        className="text-[11px] text-gray-300 hover:text-gray-500 transition-colors"
+      >
+        How it works
+      </button>
     </div>
   );
 }

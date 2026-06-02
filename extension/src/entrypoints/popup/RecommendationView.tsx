@@ -1,4 +1,7 @@
-import type { BNPLOption, RankedCard, Recommendation } from '@/types';
+import { useEffect, useState } from 'react';
+import type { BNPLOption, MerchantContext, RankedCard, Recommendation } from '@/types';
+import { historyDB } from '@/lib/storage';
+import WhyPanel from '@/components/WhyPanel';
 
 // ─── Display maps ─────────────────────────────────────────────────────────────
 
@@ -26,12 +29,22 @@ const NETWORK_CHIP: Record<string, string> = {
 export default function RecommendationView({
   rec,
   onManageWallet,
+  onShowOnboarding,
 }: {
   rec: Recommendation;
   onManageWallet: () => void;
+  onShowOnboarding: () => void;
 }) {
   const ctx = rec.merchantContext;
   const best = rec.ranked[0];
+
+  // Running total of expected value saved — read from IndexedDB after each render.
+  // App.tsx saves the current recommendation before mounting this component,
+  // so the total already includes today's checkout.
+  const [totalSaved, setTotalSaved] = useState<number>(0);
+  useEffect(() => {
+    historyDB.totalSaved().then(setTotalSaved);
+  }, [rec]);
   const rest = rec.ranked.slice(1);
   const noCards = rec.ranked.length === 0;
 
@@ -61,7 +74,7 @@ export default function RecommendationView({
           <NoCardsState onManageWallet={onManageWallet} />
         ) : (
           <>
-            {best && <BestCardSection card={best} />}
+            {best && <BestCardSection card={best} ranked={rec.ranked} merchantContext={ctx} />}
 
             {rest.length > 0 && (
               <div className="px-4 py-3">
@@ -95,15 +108,30 @@ export default function RecommendationView({
 
         {/* Footer */}
         <div className="px-4 py-2 flex items-center justify-between">
-          <span className="text-[10px] text-gray-300 font-semibold tracking-widest uppercase">
-            milkr
-          </span>
-          <button
-            onClick={onManageWallet}
-            className="text-[11px] text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            Manage wallet
-          </button>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-gray-300 font-semibold tracking-widest uppercase">
+              milkr
+            </span>
+            {totalSaved > 0 && (
+              <span className="text-[10px] text-[#1D9E75] font-medium">
+                · ${totalSaved.toFixed(2)} saved
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={onShowOnboarding}
+              className="text-[11px] text-gray-300 hover:text-gray-500 transition-colors"
+            >
+              how it works
+            </button>
+            <button
+              onClick={onManageWallet}
+              className="text-[11px] text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              Manage wallet
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -112,11 +140,20 @@ export default function RecommendationView({
 
 // ─── Best card ────────────────────────────────────────────────────────────────
 
-function BestCardSection({ card }: { card: RankedCard }) {
+function BestCardSection({
+  card,
+  ranked,
+  merchantContext,
+}: {
+  card: RankedCard;
+  ranked: RankedCard[];
+  merchantContext: MerchantContext;
+}) {
   const { catalog, resolved } = card;
   const activationUrl = ACTIVATION_URLS[catalog.issuer];
   const daysLeft = resolved.overrideExpires ? daysUntil(resolved.overrideExpires) : null;
   const expiringSoon = daysLeft !== null && daysLeft <= 7;
+  const [isExpanded, setIsExpanded] = useState(false);
 
   return (
     <div className="px-4 py-3">
@@ -185,6 +222,27 @@ function BestCardSection({ card }: { card: RankedCard }) {
             </p>
           </div>
         )}
+
+        {/* Why button — only shown when there's something to compare */}
+        {ranked.length > 0 && (
+          <button
+            onClick={() => setIsExpanded((v) => !v)}
+            className="mt-3 flex items-center gap-1 text-[11px] text-[#1D9E75] hover:text-[#189060] font-medium transition-colors"
+          >
+            <span>{isExpanded ? '▲ Hide breakdown' : '▼ Why this card?'}</span>
+          </button>
+        )}
+
+        {/* Accordion — CSS max-height transition, no layout shift */}
+        <div
+          style={{
+            maxHeight: isExpanded ? '600px' : '0',
+            overflow: 'hidden',
+            transition: 'max-height 200ms ease',
+          }}
+        >
+          <WhyPanel ranked={ranked} merchantContext={merchantContext} />
+        </div>
       </div>
     </div>
   );
